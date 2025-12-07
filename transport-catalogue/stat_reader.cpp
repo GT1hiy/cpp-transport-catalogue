@@ -1,7 +1,4 @@
-
 #include <iomanip>
-#include <cmath>
-#include <unordered_set>
 #include "stat_reader.h"
 
 #include "transport_catalogue.h"
@@ -18,12 +15,13 @@ void PrintBusInfo(string_view bus_name, const transport_catalogue::RouteInfo rou
     output << "Bus " << bus_name << ": "
            << route_info.stops_count << " stops on route, "
            << route_info.unique_stops_count << " unique stops, "
-           << setprecision(6) << route_info.route_length << " route length\n";
+           << setprecision(6) << route_info.route_length << " route length, "
+           << route_info.curvature << " curvature\n";
 
 }
 
 void PrintStopInfo(const transport_catalogue::Stop* stop,
-                   std::set<const transport_catalogue::Bus*> buses,
+                   std::set<const transport_catalogue::Bus*, transport_catalogue::BusPtrCompare> buses,
                    ostream& output) {
 
     if (buses.empty()) {
@@ -69,6 +67,5 @@ void ParseAndPrintStat(const transport_catalogue::TransportCatalogue& catalogue,
 
 
 } //stat_p
-
 
 

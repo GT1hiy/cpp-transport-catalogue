@@ -11,4 +11,3 @@ void ParseAndPrintStat(const transport_catalogue::TransportCatalogue& tansport_c
                        std::ostream& output);
 
 }
-
