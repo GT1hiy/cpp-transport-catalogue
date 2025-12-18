@@ -6,8 +6,8 @@
 #include "map_renderer.h"
 
 namespace json {
-class Document;
-class Node;
+    class Document;
+    class Node;
 }
 
 namespace request_handler {
@@ -16,52 +16,38 @@ namespace request_handler {
 
 namespace json_reader {
 
-// using namespace transport_catalogue;
+    class JsonReader {
+    public:
+        explicit JsonReader(std::istream& input, transport_catalogue::TransportCatalogue& catalogue, renderer::MapRenderer& render);
 
-class JsonReader {
-public:
-    // Конструктор, принимающий входной поток (std::cin в main.cpp)
-    explicit JsonReader(std::istream& input, transport_catalogue::TransportCatalogue& catalogue, renderer::MapRenderer& render_ );
+        const json::Document& GetDocument() const;
+        const json::Node& GetRenderSettings() const;
+        const json::Node& GetStatRequests() const;
 
-    // Заполняет транспортный каталог данными из JSON
-    void FillCatalogue(transport_catalogue::TransportCatalogue& catalogue);
+        json::Node LoadDataFromJson();
+        json::Document HandleJsonRequest(const json::Node& json_request, request_handler::RequestHandler& request_handler);
+        void HandRenderSettings();
 
-    // Новые методы для парсинга данных
-    void ParseBaseRequests(transport_catalogue::TransportCatalogue& catalogue) const;
+        renderer::RenderSettings ParseRenderSettings(const json::Node& root) const;
 
-   // renderer::RenderSettings ParseRenderSettings(const json::Dict& request_map) const;
+    private:
+        // Методы обработки отдельных запросов
+        json::Node ProcessBusRequest(const json::Dict& request) const;
+        json::Node ProcessStopRequest(const json::Dict& request) const;
+        json::Node ProcessMapRequest(const json::Dict& request, request_handler::RequestHandler& request_handler) const;
 
-    const json::Document& GetDocument() const;
+        // Вспомогательные методы
+        svg::Color ParseColor(const json::Node& color_node) const;
+        void ParseBaseRequests(transport_catalogue::TransportCatalogue& catalogue) const;
+        void ParseStops(transport_catalogue::TransportCatalogue& catalogue, const json::Array& base_requests) const;
+        void ParseBuses(transport_catalogue::TransportCatalogue& catalogue, const json::Array& base_requests) const;
+        void ParseDistances(transport_catalogue::TransportCatalogue& catalogue, const json::Array& base_requests) const;
 
-    const json::Node& GetRenderSettings() const;
+        // Хранилище распарсенных данных
+        json::Document doc_input_;
+        json::Node null_node_ = nullptr;
+        transport_catalogue::TransportCatalogue& catalogue_;
+        renderer::MapRenderer& render_;
+    };
 
-    const json::Node& GetStatRequests() const;
-
-    renderer::RenderSettings ParseRenderSettings(const json::Node& root) const;
-
-    json::Node LoadDataFromJson();
-
-    json::Document HandleJsonRequest(const json::Node& json_request, request_handler::RequestHandler& request_handler);
-
-    void  HandRenderSettings ();
-
-private:
-
-    // Вспомогательный метод для обработки цвета
-    svg::Color ParseColor(const json::Node& color_node) const;
-
-    // Вспомогательные методы
-    void ParseStops(transport_catalogue::TransportCatalogue& catalogue, const json::Array& base_requests) const;
-    void ParseBuses(transport_catalogue::TransportCatalogue& catalogue, const json::Array& base_requests) const;
-    void ParseDistances(transport_catalogue::TransportCatalogue& catalogue, const json::Array& base_requests) const;
-
-
-    // Хранилище распарсенных данных
-    json::Document doc_input_;
-    json::Node null_node_ = nullptr;
-    transport_catalogue::TransportCatalogue& catalogue_; // Основной каталог данных
-    renderer::MapRenderer& render_;
-
-};
-
-} // namespace transport_catalogue
+} // namespace json_reader
