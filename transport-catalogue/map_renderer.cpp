@@ -113,4 +113,4 @@ namespace renderer {
         RenderSettings render_settings_;
     };
 
-} // namespace renderer
+} // namespace map_renderer
