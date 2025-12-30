@@ -6,22 +6,24 @@
 
 namespace domain {
 
-    struct Stop {
-        std::string name;
-        geo::Coordinates coordinates;
-    };
+using namespace geo;
 
-    struct Bus {
-        std::string name;
-        std::vector<const Stop*> stops;
-        bool is_roundtrip;
-    };
+struct Stop {
+    std::string name;
+    Coordinates coordinates;
+};
 
-    struct RouteInfo {
-        size_t stops_count;
-        size_t unique_stops_count;
-        double route_length;
-        double curvature;
-    };
+struct Bus {
+    std::string name;
+    std::vector<const Stop*> stops;
+    bool is_roundtrip;
+};
+
+struct RouteInfo {
+    size_t stops_count;
+    size_t unique_stops_count;
+    double route_length;
+    double curvature;
+};
 
 } // namespace domain
