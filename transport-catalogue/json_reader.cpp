@@ -132,8 +132,6 @@ json::Node JsonReader::ProcessStopRequest(const json::Dict& request, int id) con
 
 json::Node JsonReader::ProcessMapRequest(int id,
                                          request_handler::RequestHandler& request_handler) const {
-    (void)id; // Используем параметр ниже
-    
     Dict response;
     response["request_id"s] = id;
     
