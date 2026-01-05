@@ -45,6 +45,8 @@ public:
     double AsDouble() const;
 
     const Var& GetVariant() const;
+    Var& GetValue() { return *this; }
+    const Var& GetValue() const { return *this; }
 
     bool operator==(const Node& rhs) const;
     bool operator!=(const Node& rhs) const;

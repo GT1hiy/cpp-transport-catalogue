@@ -5,6 +5,7 @@
 #include "domain.h"
 #include "json.h"
 #include "json_reader.h"
+#include "json_builder.h"
 #include "request_handler.h"
 #include "transport_catalogue.h"
 
@@ -48,7 +49,9 @@ json::Document JsonReader::HandleJsonRequest(const json::Node& json_request,
         throw invalid_argument("Invalid JSON format: stat_requests should be an array"s);
     }
 
-    Array responses;
+    Builder builder;
+    auto array_context = builder.StartArray();
+    
     const Array& requests = root.AsArray();
 
     for (const Node& request_node : requests) {
@@ -56,90 +59,113 @@ json::Document JsonReader::HandleJsonRequest(const json::Node& json_request,
         int id = request.at("id"s).AsInt();
         string type = request.at("type"s).AsString();
 
-        Node response;
         try {
             if (type == "Bus"s) {
-                response = ProcessBusRequest(request, id);
+                Node response = ProcessBusRequest(request, id);
+                array_context.Value(response.GetValue());
             } else if (type == "Stop"s) {
-                response = ProcessStopRequest(request, id);
+                Node response = ProcessStopRequest(request, id);
+                array_context.Value(response.GetValue());
             } else if (type == "Map"s) {
-                response = ProcessMapRequest(id, request_handler);
+                Node response = ProcessMapRequest(id, request_handler);
+                array_context.Value(response.GetValue());
             } else {
-                Dict error_response;
-                error_response["request_id"s] = id;
-                error_response["error_message"s] = "unknown request type: "s + type;
-                response = Node(std::move(error_response));
+                Builder error_builder;
+                error_builder.StartDict()
+                           .Key("request_id"s).Value(id)
+                           .Key("error_message"s).Value("unknown request type: "s + type)
+                           .EndDict();
+                array_context.Value(error_builder.Build().GetValue());
             }
         } catch (const exception& e) {
-            Dict error_response;
-            error_response["request_id"s] = id;
-            error_response["error_message"s] = e.what();
-            response = Node(std::move(error_response));
+            Builder error_builder;
+            error_builder.StartDict()
+                       .Key("request_id"s).Value(id)
+                       .Key("error_message"s).Value(string(e.what()))
+                       .EndDict();
+            array_context.Value(error_builder.Build().GetValue());
         }
-
-        responses.push_back(std::move(response));
     }
 
-    return json::Document(std::move(responses));
+    array_context.EndArray();
+    return json::Document(builder.Build());
 }
 
 json::Node JsonReader::ProcessBusRequest(const json::Dict& request, int id) const {
-    Dict response;
-    response["request_id"s] = id;
+    Builder builder;
     
     string name = request.at("name"s).AsString();
     const Bus* bus = catalogue_.GetBus(name);
 
     if (!bus) {
-        response["error_message"s] = "not found"s;
+        builder.StartDict()
+               .Key("request_id"s).Value(id)
+               .Key("error_message"s).Value("not found"s)
+               .EndDict();
     } else {
         auto route_info_opt = catalogue_.GetRouteInfo(name);
         if (route_info_opt) {
             auto& info = *route_info_opt;
-            response["route_length"s] = static_cast<int>(info.route_length);
-            response["curvature"s] = info.curvature;
-            response["stop_count"s] = static_cast<int>(info.stops_count);
-            response["unique_stop_count"s] = static_cast<int>(info.unique_stops_count);
+            builder.StartDict()
+                   .Key("request_id"s).Value(id)
+                   .Key("route_length").Value(static_cast<int>(info.route_length))
+                   .Key("curvature").Value(info.curvature)
+                   .Key("stop_count").Value(static_cast<int>(info.stops_count))
+                   .Key("unique_stop_count").Value(static_cast<int>(info.unique_stops_count))
+                   .EndDict();
         } else {
-            response["error_message"s] = "not found"s;
+            builder.StartDict()
+                   .Key("request_id"s).Value(id)
+                   .Key("error_message"s).Value("not found"s)
+                   .EndDict();
         }
     }
     
-    return Node(std::move(response));
+    return builder.Build();
 }
 
 json::Node JsonReader::ProcessStopRequest(const json::Dict& request, int id) const {
-    Dict response;
-    response["request_id"s] = id;
+    Builder builder;
     
     string name = request.at("name"s).AsString();
     const Stop* stop = catalogue_.GetStop(name);
 
     if (!stop) {
-        response["error_message"s] = "not found"s;
+        builder.StartDict()
+               .Key("request_id"s).Value(id)
+               .Key("error_message"s).Value("not found"s)
+               .EndDict();
     } else {
         auto buses = catalogue_.GetBusesForStop(name);
-        Array bus_names;
-        bus_names.reserve(buses.size());
+        
+        builder.StartDict()
+               .Key("request_id"s).Value(id)
+               .Key("buses"s).StartArray();
+        
         for (const Bus* bus : buses) {
-            bus_names.push_back(bus->name);
+            builder.Value(bus->name);
         }
-        response["buses"s] = std::move(bus_names);
+        
+        builder.EndArray()
+               .EndDict();
     }
     
-    return Node(std::move(response));
+    return builder.Build();
 }
 
 json::Node JsonReader::ProcessMapRequest(int id,
                                          request_handler::RequestHandler& request_handler) const {
-    Dict response;
-    response["request_id"s] = id;
+    Builder builder;
     
     std::ostringstream out;
     request_handler.RenderMap().Render(out);
-    response["map"s] = Node(out.str());
     
-    return Node(std::move(response));
+    builder.StartDict()
+           .Key("request_id"s).Value(id)
+           .Key("map"s).Value(out.str())
+           .EndDict();
+    
+    return builder.Build();
 }
 
 void JsonReader::HandRenderSettings() {
