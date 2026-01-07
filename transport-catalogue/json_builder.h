@@ -1,5 +1,7 @@
 #pragma once
+
 #include "json.h"
+#include <optional>
 
 namespace json {
 
@@ -19,7 +21,7 @@ class DictItemContext : public BaseContext {
 public:
     DictItemContext(Builder& builder) : BaseContext(builder) {}
 
-    DictKeyContext  Key(const std::string& key);
+    DictKeyContext Key(std::string key);
     Builder& EndDict();
 };
 
@@ -44,28 +46,24 @@ public:
     ArrayItemContext StartArray();
 };
 
-
-
 class Builder {
-public :
-    Builder ();
-    DictKeyContext Key(const std::string&);
-    Builder& Value(Node::Var);
+public:
+    Builder();
+    DictKeyContext Key(std::string key);
+    Builder& Value(Node::Var value);
     DictItemContext StartDict();
     ArrayItemContext StartArray();
     Builder& EndDict();
     Builder& EndArray();
     Node Build();
 
-
 private:
-   // void AddObject(Node::Value&& value, bool one_shot) ;
     void AddNode(Node&& node, bool one_shot);
-    Node::Var& GetCurrentValue() ;
+    Node::Var& GetCurrentValue();
 
     Node root_;
     std::vector<Node*> nodes_stack_;
-    std::string current_key_;
+    std::optional<std::string> current_key_; // Используем std::optional
     bool key_expected_ = false; // Ожидается ли ключ в словаре
 
     // Дружественные классы для доступа к приватным методам
