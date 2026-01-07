@@ -1,5 +1,5 @@
 #include <variant>
-// #include <iostream>
+#include <optional>
 #include "json_builder.h"
 
 namespace json {
@@ -13,13 +13,10 @@ Node::Var& Builder::GetCurrentValue() {
     if (nodes_stack_.empty()) {
         throw std::logic_error("No current value in the stack");
     }
-    // Используем метод GetValue() вместо GetValueNoConst()
     return nodes_stack_.back()->GetValue();
 }
 
-
 void Builder::AddNode(Node&& node, bool one_shot) {
-
     Node::Var& host_value = GetCurrentValue();
 
     if (std::holds_alternative<std::nullptr_t>(host_value)) {
@@ -30,15 +27,19 @@ void Builder::AddNode(Node&& node, bool one_shot) {
             nodes_stack_.push_back(nodes_stack_.back());
         }
     } else if (auto* dict = std::get_if<Dict>(&host_value)) {
-            // Для словаря используем сохраненный ключ
-            // Вставляем и получаем итератор на вставленный элемент
-            auto [it, inserted] = dict->emplace(current_key_, std::move(node));
-            current_key_.clear();
+        // Для словаря используем сохраненный ключ
+        if (!current_key_) {
+            throw std::logic_error("No key provided for dictionary value");
+        }
+        // Вставляем и получаем итератор на вставленный элемент
+        auto [it, inserted] = dict->emplace(std::move(*current_key_), std::move(node));
+        current_key_.reset();
+        key_expected_ = false; // Исправлено: сбрасываем флаг здесь
 
-            if (!one_shot) {
-                // Добавляем указатель на только что вставленный узел
-                nodes_stack_.push_back(&it->second);
-            }
+        if (!one_shot) {
+            // Добавляем указатель на только что вставленный узел
+            nodes_stack_.push_back(&it->second);
+        }
 
     } else if (auto* array = std::get_if<Array>(&host_value)) {
         // Для массива просто добавляем узел
@@ -53,13 +54,11 @@ void Builder::AddNode(Node&& node, bool one_shot) {
     }
 }
 
-
-DictItemContext  Builder::StartDict() {
-
+DictItemContext Builder::StartDict() {
     Node::Var& host_value = GetCurrentValue();
 
     // Проверяем, можно ли начать словарь в текущем контексте
-     if (std::holds_alternative<Dict>(host_value) && !key_expected_) {
+    if (std::holds_alternative<Dict>(host_value) && !key_expected_) {
         throw std::logic_error("StartDict called in dictionary without a key");
     }
 
@@ -73,16 +72,10 @@ DictItemContext  Builder::StartDict() {
     Node dict_node{Dict{}};
     AddNode(std::move(dict_node), false);
 
-    // Сбрасываем флаг ожидания ключа после начала словаря
-    if (std::holds_alternative<Dict>(host_value)) {
-        key_expected_ = false;
-    }
-
-     return DictItemContext(*this);
+    return DictItemContext(*this);
 }
 
-DictKeyContext Builder::Key(const std::string& key) {
-
+DictKeyContext Builder::Key(std::string key) {
     Node::Var& host_value = GetCurrentValue();
 
     if (!std::holds_alternative<Dict>(host_value)) {
@@ -93,18 +86,12 @@ DictKeyContext Builder::Key(const std::string& key) {
         throw std::logic_error("Key called immediately after another Key without Value");
     }
 
-    // Проверяем, что нет незакрытого ключа
-    if (!current_key_.empty()) {
-        throw std::logic_error("Key called immediately after another Key without Value");
-    }
-
-    current_key_ = key;
+    current_key_ = std::move(key);
     key_expected_ = true; // После Key ожидается Value
     return DictKeyContext(*this);
 }
 
 Builder& Builder::Value(Node::Var value) {
-
     Node::Var& host_value = GetCurrentValue();
 
     // Проверяем, можно ли добавить значение в текущем контексте
@@ -119,32 +106,9 @@ Builder& Builder::Value(Node::Var value) {
         throw std::logic_error("Value called in invalid context");
     }
 
-    // Создаем Node из variant с помощью std::visit
-    Node node = std::visit([](auto&& arg) -> Node {
-        using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_same_v<T, std::nullptr_t>) {
-            return Node(nullptr);
-        } else if constexpr (std::is_same_v<T, std::string>) {
-            return Node(std::move(arg));
-        } else if constexpr (std::is_same_v<T, int>) {
-            return Node(arg);
-        } else if constexpr (std::is_same_v<T, double>) {
-            return Node(arg);
-        } else if constexpr (std::is_same_v<T, bool>) {
-            return Node(arg);
-        } else if constexpr (std::is_same_v<T, Array>) {
-            return Node(std::move(arg));
-        } else if constexpr (std::is_same_v<T, Dict>) {
-            return Node(std::move(arg));
-        }
-    }, std::move(value));
-
+    // Используем конструктор Node от Node::Var
+    Node node(std::move(value));
     AddNode(std::move(node), true);
-
-    // Сбрасываем флаг ожидания ключа после добавления значения
-    if (std::holds_alternative<Dict>(host_value)) {
-        key_expected_ = false;
-    }
 
     return *this;
 }
@@ -164,11 +128,10 @@ Builder& Builder::EndDict() {
 }
 
 ArrayItemContext Builder::StartArray() {
-
     Node::Var& host_value = GetCurrentValue();
 
     // Проверяем, можно ли начать массив в текущем контексте
-   if (std::holds_alternative<Dict>(host_value) && !key_expected_)  {
+    if (std::holds_alternative<Dict>(host_value) && !key_expected_)  {
         throw std::logic_error("StartArray called in dictionary without a key");
     }
 
@@ -181,11 +144,6 @@ ArrayItemContext Builder::StartArray() {
     // Создаем новый массив как Node
     Node array_node{Array{}};
     AddNode(std::move(array_node), false);
-
-    // Сбрасываем флаг ожидания ключа после начала массива
-    if (std::holds_alternative<Dict>(host_value)) {
-        key_expected_ = false;
-    }
 
     return ArrayItemContext(*this);
 }
@@ -217,7 +175,7 @@ Node Builder::Build() {
     }
 
     // Проверяем, что нет незакрытых ключей
-    if (!current_key_.empty()) {
+    if (current_key_) {
         throw std::logic_error("Build called with unfinished key");
     }
 
@@ -226,9 +184,9 @@ Node Builder::Build() {
 }
 
 // Реализации методов контекстных классов ===========================
-DictKeyContext DictItemContext::Key(const std::string& key) {
-    builder_.Key(key);
-    return DictKeyContext(builder_); ;
+DictKeyContext DictItemContext::Key(std::string key) {
+    builder_.Key(std::move(key));
+    return DictKeyContext(builder_);
 }
 
 Builder& DictItemContext::EndDict() {
@@ -264,7 +222,5 @@ DictItemContext ArrayItemContext::StartDict() {
 ArrayItemContext ArrayItemContext::StartArray() {
     return builder_.StartArray();
 }
-
-//==================================================================
 
 } // namespace json
