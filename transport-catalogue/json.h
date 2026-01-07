@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <variant>
+#include <optional>
 
 namespace json {
 
@@ -27,6 +28,7 @@ public:
     using variant::variant;
 
     Node(const char* value) ;
+    Node(Var&& value) : variant(std::move(value)) {} // Добавляем конструктор от Var
 
     bool IsInt() const;
     bool IsDouble() const;
