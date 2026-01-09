@@ -63,8 +63,8 @@ private:
 
     Node root_;
     std::vector<Node*> nodes_stack_;
-    std::optional<std::string> current_key_; // Используем std::optional
-    bool key_expected_ = false; // Ожидается ли ключ в словаре
+    std::optional<std::string> current_key_; // Объединяем current_key_ и key_expected_
+    // key_expected_ заменяем проверкой current_key_.has_value()
 
     // Дружественные классы для доступа к приватным методам
     friend class DictKeyContext;
