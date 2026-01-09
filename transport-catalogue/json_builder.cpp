@@ -33,8 +33,7 @@ void Builder::AddNode(Node&& node, bool one_shot) {
         }
         // Вставляем и получаем итератор на вставленный элемент
         auto [it, inserted] = dict->emplace(std::move(*current_key_), std::move(node));
-        current_key_.reset();
-        key_expected_ = false; // Исправлено: сбрасываем флаг здесь
+        current_key_.reset(); // Ключ использован, сбрасываем
 
         if (!one_shot) {
             // Добавляем указатель на только что вставленный узел
@@ -58,7 +57,8 @@ DictItemContext Builder::StartDict() {
     Node::Var& host_value = GetCurrentValue();
 
     // Проверяем, можно ли начать словарь в текущем контексте
-    if (std::holds_alternative<Dict>(host_value) && !key_expected_) {
+    // Если current_key_ имеет значение, значит мы в процессе заполнения ключа в словаре
+    if (std::holds_alternative<Dict>(host_value) && !current_key_) {
         throw std::logic_error("StartDict called in dictionary without a key");
     }
 
@@ -82,12 +82,12 @@ DictKeyContext Builder::Key(std::string key) {
         throw std::logic_error("Key method called outside a dictionary");
     }
 
-    if (key_expected_) {
+    // Если current_key_ уже имеет значение, значит предыдущий ключ не получил значение
+    if (current_key_) {
         throw std::logic_error("Key called immediately after another Key without Value");
     }
 
-    current_key_ = std::move(key);
-    key_expected_ = true; // После Key ожидается Value
+    current_key_ = std::move(key); // Устанавливаем ключ
     return DictKeyContext(*this);
 }
 
@@ -95,7 +95,8 @@ Builder& Builder::Value(Node::Var value) {
     Node::Var& host_value = GetCurrentValue();
 
     // Проверяем, можно ли добавить значение в текущем контексте
-    if (std::holds_alternative<Dict>(host_value) && !key_expected_) {
+    // Если в словаре и нет установленного ключа - ошибка
+    if (std::holds_alternative<Dict>(host_value) && !current_key_) {
         throw std::logic_error("Value called in dictionary without a key");
     }
 
@@ -131,7 +132,8 @@ ArrayItemContext Builder::StartArray() {
     Node::Var& host_value = GetCurrentValue();
 
     // Проверяем, можно ли начать массив в текущем контексте
-    if (std::holds_alternative<Dict>(host_value) && !key_expected_)  {
+    // Если в словаре и нет установленного ключа - ошибка
+    if (std::holds_alternative<Dict>(host_value) && !current_key_)  {
         throw std::logic_error("StartArray called in dictionary without a key");
     }
 
