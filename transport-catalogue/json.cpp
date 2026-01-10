@@ -480,7 +480,7 @@ void PrintNode(const Node& node, std::ostream& out) {
     }
 
 }
-//
+
 void Print(const Document& doc, std::ostream& output) {
     PrintNode(doc.GetRoot(), output);
 }
