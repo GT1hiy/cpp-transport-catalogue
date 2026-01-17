@@ -18,4 +18,4 @@ struct Coordinates {
 
 double ComputeDistance(Coordinates from, Coordinates to);
 
-} //geo
+} //geo.
