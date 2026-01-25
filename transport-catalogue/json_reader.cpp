@@ -8,6 +8,7 @@
 #include "json_builder.h"
 #include "request_handler.h"
 #include "transport_catalogue.h"
+#include "transport_router.h"
 
 namespace json_reader {
 
@@ -15,6 +16,7 @@ using namespace domain;
 using namespace json;
 using namespace std::string_literals;
 using namespace std;
+using RouteData = transport_catalogue::RouteData;
 
 JsonReader::JsonReader(std::istream& input, 
                        transport_catalogue::TransportCatalogue& catalogue,
@@ -33,6 +35,10 @@ json::Node JsonReader::LoadDataFromJson() {
     
     if (auto render_settings = GetRenderSettings(); render_settings != nullptr) {
         render_.SetRenderSettings(ParseRenderSettings(render_settings));
+    }
+    
+    if (auto routing_settings = GetRoutingSettings(); routing_settings != nullptr) {
+        catalogue_.SetRouteSettings(ParseRoutingSettings(routing_settings));
     }
     
     return GetStatRequests();
@@ -68,6 +74,9 @@ json::Document JsonReader::HandleJsonRequest(const json::Node& json_request,
                 array_context.Value(response.GetValue());
             } else if (type == "Map"s) {
                 Node response = ProcessMapRequest(id, request_handler);
+                array_context.Value(response.GetValue());
+            } else if (type == "Route"s) {
+                Node response = ProcessRouteRequest(request, id);
                 array_context.Value(response.GetValue());
             } else {
                 Builder error_builder;
@@ -168,6 +177,51 @@ json::Node JsonReader::ProcessMapRequest(int id,
     return builder.Build();
 }
 
+json::Node JsonReader::ProcessRouteRequest(const json::Dict& request, int id) const {
+    Builder builder;
+    
+    std::string from = request.at("from"s).AsString();
+    std::string to = request.at("to"s).AsString();
+    
+    auto route_data_opt = catalogue_.BuildRoute(from, to);
+    
+    if (!route_data_opt) {
+        builder.StartDict()
+               .Key("request_id"s).Value(id)
+               .Key("error_message"s).Value("not found"s)
+               .EndDict();
+    } else {
+        const auto& route_data = *route_data_opt;
+        builder.StartDict()
+               .Key("request_id"s).Value(id)
+               .Key("total_time"s).Value(route_data.total_time.count())
+               .Key("items"s).StartArray();
+        
+        for (const auto& item : route_data.items) {
+            if (std::holds_alternative<WaitItem>(item)) {
+                const auto& wait_item = std::get<WaitItem>(item);
+                builder.StartDict()
+                       .Key("type"s).Value("Wait"s)
+                       .Key("stop_name"s).Value(wait_item.stop_name)
+                       .Key("time"s).Value(wait_item.time)
+                       .EndDict();
+            } else if (std::holds_alternative<BusItem>(item)) {
+                const auto& bus_item = std::get<BusItem>(item);
+                builder.StartDict()
+                       .Key("type"s).Value("Bus"s)
+                       .Key("bus"s).Value(bus_item.bus)
+                       .Key("span_count"s).Value(bus_item.span_count)
+                       .Key("time"s).Value(bus_item.time)
+                       .EndDict();
+            }
+        }
+        
+        builder.EndArray().EndDict();
+    }
+    
+    return builder.Build();
+}
+
 void JsonReader::HandRenderSettings() {
     std::ostringstream out_map;
     const json::Node rnd_sttng = GetRenderSettings();
@@ -191,6 +245,13 @@ const json::Node& JsonReader::GetStatRequests() const {
         return null_node_;
     }
     return doc_input_.GetRoot().AsMap().at("stat_requests"s);
+}
+
+const json::Node& JsonReader::GetRoutingSettings() const {
+    if (!doc_input_.GetRoot().AsMap().count("routing_settings"s)) {
+        return null_node_;
+    }
+    return doc_input_.GetRoot().AsMap().at("routing_settings"s);
 }
 
 void JsonReader::ParseBaseRequests(transport_catalogue::TransportCatalogue& catalogue) const {
@@ -313,6 +374,16 @@ renderer::RenderSettings JsonReader::ParseRenderSettings(const Node& root) const
     }
 
     return render_settings;
+}
+
+domain::RouteSettings JsonReader::ParseRoutingSettings(const Node& root) const {
+    domain::RouteSettings settings;
+    const json::Dict& settings_dict = root.AsMap();
+    
+    settings.bus_wait_time = settings_dict.at("bus_wait_time"s).AsInt();
+    settings.bus_velocity = settings_dict.at("bus_velocity"s).AsDouble();
+    
+    return settings;
 }
 
 } // namespace json_reader

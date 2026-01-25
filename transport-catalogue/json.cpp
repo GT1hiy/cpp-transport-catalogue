@@ -39,7 +39,7 @@ Node LoadNumber(std::istream& input) {
     using namespace std::literals;
 
     std::string parsed_num;
-//
+
     // Считывает в parsed_num очередной символ из input
     auto read_char = [&parsed_num, &input] {
         parsed_num += static_cast<char>(input.get());

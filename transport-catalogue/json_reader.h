@@ -32,12 +32,14 @@ public:
     
     const json::Node& GetRenderSettings() const;
     const json::Node& GetStatRequests() const;
+    const json::Node& GetRoutingSettings() const;
     
 private:
     json::Node ProcessBusRequest(const json::Dict& request, int id) const;
     json::Node ProcessStopRequest(const json::Dict& request, int id) const;
     json::Node ProcessMapRequest(int id,
                                  request_handler::RequestHandler& request_handler) const;
+    json::Node ProcessRouteRequest(const json::Dict& request, int id) const;
     
     void ParseBaseRequests(transport_catalogue::TransportCatalogue& catalogue) const;
     void ParseStops(transport_catalogue::TransportCatalogue& catalogue, 
@@ -48,6 +50,7 @@ private:
                         const json::Array& base_requests) const;
     
     renderer::RenderSettings ParseRenderSettings(const json::Node& root) const;
+    domain::RouteSettings ParseRoutingSettings(const json::Node& root) const;
     svg::Color ParseColor(const json::Node& color_node) const;
     
     json::Document doc_input_;

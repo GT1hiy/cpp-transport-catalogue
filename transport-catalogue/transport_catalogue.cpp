@@ -1,11 +1,24 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <cmath>
 #include "geo.h"
 #include "transport_catalogue.h"
+#include "transport_router.h"
 
 namespace transport_catalogue {
 
+// Внутренний класс для реализации маршрутизации
+class TransportCatalogue::RouterImpl {
+public:
+    std::unique_ptr<TransportRouter> router;
+};
+
+TransportCatalogue::TransportCatalogue() : router_impl_(nullptr) {}
+
+TransportCatalogue::~TransportCatalogue() {
+    delete router_impl_;
+}
 void TransportCatalogue::AddStop(const std::string& name, geo::Coordinates coordinates) {
     all_stops_.push_back({name, coordinates});
     stopname_to_stop_[all_stops_.back().name] = &all_stops_.back();
@@ -74,12 +87,12 @@ std::optional<domain::RouteInfo> TransportCatalogue::GetRouteInfo(std::string_vi
     }
 
     std::unordered_set<const domain::Stop*> unique_stops(bus->stops.begin(), bus->stops.end());
-    info.unique_stops_count = unique_stops.size();
+    info.unique_stops_count = static_cast<int>(unique_stops.size());
 
     if (bus->is_roundtrip) {
-        info.stops_count = bus->stops.size();
+        info.stops_count = static_cast<int>(bus->stops.size());
     } else {
-        info.stops_count = 2 * bus->stops.size() - 1;
+        info.stops_count = static_cast<int>(2 * bus->stops.size() - 1);
     }
 
     double geo_length = 0.0;
@@ -156,6 +169,23 @@ void TransportCatalogue::AddDistance(const std::string& name, const std::vector<
         }
         SetDistance(from_stop, to_stop, distance);
     }
+}
+
+// Реализация методов маршрутизации
+void TransportCatalogue::SetRouteSettings(const domain::RouteSettings& settings) {
+    if (router_impl_) {
+        delete router_impl_;
+    }
+    router_impl_ = new RouterImpl();
+    router_impl_->router = std::make_unique<TransportRouter>(*this);
+    router_impl_->router->SetSettings(settings);
+}
+
+std::optional<RouteData> TransportCatalogue::BuildRoute(std::string_view from, std::string_view to) const {
+    if (!router_impl_ || !router_impl_->router) {
+        return std::nullopt;
+    }
+    return router_impl_->router->BuildRoute(from, to);
 }
 
 } // namespace transport_catalogue
