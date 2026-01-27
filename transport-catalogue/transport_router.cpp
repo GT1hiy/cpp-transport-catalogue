@@ -1,16 +1,13 @@
 #include "transport_router.h"
-#include "transport_catalogue.h"
 #include <cmath>
 #include <algorithm>
 
 namespace transport_catalogue {
 
-TransportRouter::TransportRouter(const TransportCatalogue& catalogue)
-    : catalogue_(catalogue) {
-}
-
-void TransportRouter::SetSettings(const domain::RouteSettings& settings) {
-    settings_ = settings;
+TransportRouter::TransportRouter(const TransportCatalogue& catalogue, 
+                               const domain::RouteSettings& settings)
+    : catalogue_(catalogue)
+    , settings_(settings) {
     BuildGraph();
 }
 
@@ -231,7 +228,6 @@ std::optional<RouteData> TransportRouter::BuildRoute(std::string_view from,
         
         if (edge.is_wait) {
             // Это ребро ожидания
-            // Находим остановку по вершине ожидания
             const domain::Stop* stop = nullptr;
             for (const auto& [s, v] : stop_to_vertex_) {
                 if (v == edge.from) {
@@ -243,7 +239,7 @@ std::optional<RouteData> TransportRouter::BuildRoute(std::string_view from,
             if (stop) {
                 domain::WaitItem wait_item{
                     stop->name,
-                    edge.weight  // время ожидания
+                    edge.weight
                 };
                 result.items.push_back(wait_item);
             }
@@ -253,7 +249,7 @@ std::optional<RouteData> TransportRouter::BuildRoute(std::string_view from,
                 domain::BusItem bus_item{
                     edge.bus_ptr->name,
                     edge.span_count,
-                    edge.weight  // время поездки
+                    edge.weight
                 };
                 result.items.push_back(bus_item);
             }

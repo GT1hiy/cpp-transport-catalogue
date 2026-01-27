@@ -8,20 +8,22 @@
 #include "domain.h"
 #include "graph.h"
 #include "router.h"
+#include "transport_catalogue.h"
 
 namespace transport_catalogue {
 
-class TransportCatalogue; // Предварительное объявление
-
 using Minutes = std::chrono::duration<double, std::chrono::minutes::period>;
 
-struct RouteData;
+struct RouteData {
+    Minutes total_time;
+    std::vector<std::variant<domain::WaitItem, domain::BusItem>> items;
+};
 
 class TransportRouter {
 public:
-    explicit TransportRouter(const TransportCatalogue& catalogue);
+    explicit TransportRouter(const TransportCatalogue& catalogue, 
+                            const domain::RouteSettings& settings);
     
-    void SetSettings(const domain::RouteSettings& settings);
     std::optional<RouteData> BuildRoute(std::string_view from, std::string_view to) const;
     
 private:

@@ -4,11 +4,13 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 #include "json.h"
 #include "domain.h"
 #include "map_renderer.h"
 #include "transport_catalogue.h"
+#include "transport_router.h"
 
 namespace request_handler {
     class RequestHandler;
@@ -34,12 +36,15 @@ public:
     const json::Node& GetStatRequests() const;
     const json::Node& GetRoutingSettings() const;
     
+    std::unique_ptr<transport_catalogue::TransportRouter> CreateRouter() const;
+    
 private:
     json::Node ProcessBusRequest(const json::Dict& request, int id) const;
     json::Node ProcessStopRequest(const json::Dict& request, int id) const;
     json::Node ProcessMapRequest(int id,
                                  request_handler::RequestHandler& request_handler) const;
-    json::Node ProcessRouteRequest(const json::Dict& request, int id) const;
+    json::Node ProcessRouteRequest(const json::Dict& request, int id,
+                                   transport_catalogue::TransportRouter& router) const;
     
     void ParseBaseRequests(transport_catalogue::TransportCatalogue& catalogue) const;
     void ParseStops(transport_catalogue::TransportCatalogue& catalogue, 
@@ -57,6 +62,8 @@ private:
     transport_catalogue::TransportCatalogue& catalogue_;
     renderer::MapRenderer& render_;
     json::Node null_node_{nullptr};
+    domain::RouteSettings route_settings_;
+    bool has_route_settings_ = false;
 };
 
 } // namespace json_reader

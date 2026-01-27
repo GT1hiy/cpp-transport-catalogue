@@ -16,14 +16,14 @@ using namespace domain;
 using namespace json;
 using namespace std::string_literals;
 using namespace std;
-using RouteData = transport_catalogue::RouteData;
 
 JsonReader::JsonReader(std::istream& input, 
                        transport_catalogue::TransportCatalogue& catalogue,
                        renderer::MapRenderer& render)
     : doc_input_(json::Load(input))
     , catalogue_(catalogue)
-    , render_(render) {
+    , render_(render)
+    , has_route_settings_(false) {
 }
 
 const json::Document& JsonReader::GetDocument() const {
@@ -38,10 +38,18 @@ json::Node JsonReader::LoadDataFromJson() {
     }
     
     if (auto routing_settings = GetRoutingSettings(); routing_settings != nullptr) {
-        catalogue_.SetRouteSettings(ParseRoutingSettings(routing_settings));
+        route_settings_ = ParseRoutingSettings(routing_settings);
+        has_route_settings_ = true;
     }
     
     return GetStatRequests();
+}
+
+std::unique_ptr<transport_catalogue::TransportRouter> JsonReader::CreateRouter() const {
+    if (!has_route_settings_) {
+        return nullptr;
+    }
+    return std::make_unique<transport_catalogue::TransportRouter>(catalogue_, route_settings_);
 }
 
 json::Document JsonReader::HandleJsonRequest(const json::Node& json_request,
@@ -55,6 +63,9 @@ json::Document JsonReader::HandleJsonRequest(const json::Node& json_request,
         throw invalid_argument("Invalid JSON format: stat_requests should be an array"s);
     }
 
+    // Создаем роутер для обработки запросов Route
+    auto router = CreateRouter();
+    
     Builder builder;
     auto array_context = builder.StartArray();
     
@@ -76,8 +87,17 @@ json::Document JsonReader::HandleJsonRequest(const json::Node& json_request,
                 Node response = ProcessMapRequest(id, request_handler);
                 array_context.Value(response.GetValue());
             } else if (type == "Route"s) {
-                Node response = ProcessRouteRequest(request, id);
-                array_context.Value(response.GetValue());
+                if (!router) {
+                    Builder error_builder;
+                    error_builder.StartDict()
+                               .Key("request_id"s).Value(id)
+                               .Key("error_message"s).Value("Routing settings not provided"s)
+                               .EndDict();
+                    array_context.Value(error_builder.Build().GetValue());
+                } else {
+                    Node response = ProcessRouteRequest(request, id, *router);
+                    array_context.Value(response.GetValue());
+                }
             } else {
                 Builder error_builder;
                 error_builder.StartDict()
@@ -177,13 +197,14 @@ json::Node JsonReader::ProcessMapRequest(int id,
     return builder.Build();
 }
 
-json::Node JsonReader::ProcessRouteRequest(const json::Dict& request, int id) const {
+json::Node JsonReader::ProcessRouteRequest(const json::Dict& request, int id,
+                                           transport_catalogue::TransportRouter& router) const {
     Builder builder;
     
     std::string from = request.at("from"s).AsString();
     std::string to = request.at("to"s).AsString();
     
-    auto route_data_opt = catalogue_.BuildRoute(from, to);
+    auto route_data_opt = router.BuildRoute(from, to);
     
     if (!route_data_opt) {
         builder.StartDict()
